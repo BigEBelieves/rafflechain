@@ -47,6 +47,19 @@ button{width:100%;padding:14px;border:none;border-radius:12px;font-size:1em;font
 .buyer-usdg{color:#888;font-size:.75em;text-align:right}
 .foot{color:#555;font-size:.75em;text-align:center;padding:20px 0;line-height:1.6}
 .deadline{color:#ffaa44}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:flex-end;justify-content:center;z-index:100}
+.modal-bg.open{display:flex}
+.modal{background:#111118;border:1px solid #333;border-radius:16px 16px 0 0;width:100%;max-width:560px;padding:20px;max-height:80vh;overflow-y:auto}
+@media (min-width:480px){.modal-bg{align-items:center;padding:20px}.modal{border-radius:16px}}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.modal-title{font-weight:700;font-size:1.1em;color:#fff}
+.modal-close{width:36px;height:36px;flex-shrink:0;background:#1a1a2e;border:1px solid #333;border-radius:10px;color:#888;font-size:1em;cursor:pointer;margin:0;padding:0}
+.modal-sub{color:#888;font-size:.75em;margin:14px 0 8px;text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.wallet-opt{display:flex;align-items:center;gap:12px;background:#0d0d14;border:1px solid #222;border-radius:12px;padding:14px;margin:0 0 10px 0;cursor:pointer;width:100%;color:#fff;font-size:1em;font-weight:600;text-decoration:none;text-align:left}
+.wallet-opt:hover{border-color:#00C805}
+.wallet-opt img{width:32px;height:32px;border-radius:8px;flex-shrink:0}
+.wallet-ico{width:32px;height:32px;border-radius:8px;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:1.2em;flex-shrink:0}
+.wallet-hint{color:#666;font-size:.75em;margin-top:2px;font-weight:400}
 @media (max-width:480px){.prize-wrap{flex-direction:column;text-align:center}.prize-img{width:160px;height:160px}}
 </style>
 </head>
@@ -108,6 +121,17 @@ button{width:100%;padding:14px;border:none;border-radius:12px;font-size:1em;font
   </div>
 </div>
 
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Connect a Wallet</div>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div id="injectedList"></div>
+    <div id="deepLinks"></div>
+  </div>
+</div>
+
 <script>
 (function(){
 "use strict";
@@ -116,6 +140,7 @@ var CHAIN_HEX='0x1237'; // 4663
 var ESCROW='0x9Dc6A206c09d4CF429D7A171A590c8bA2EE3b1EF';
 var USDG='0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168';
 var DEC=1000000n; // USDG has 6 decimals
+var DAPP_URL='https://bigebelieves.github.io/raffle-hood/';
 
 // function selectors (keccak-verified)
 var SEL={
@@ -133,7 +158,17 @@ var SEL={
   balanceOf:'0x70a08231'
 };
 
-var account=null, price=0n, minRev=0n, raised=0n;
+var account=null, provider=null, price=0n, minRev=0n, raised=0n;
+
+// EIP-6963 multi-wallet discovery — wallets announce themselves with name + icon
+var discovered=[];
+window.addEventListener('eip6963:announceProvider',function(e){
+  try{
+    var d=e.detail;
+    if(d&&d.info&&!discovered.some(function(x){return x.info.uuid===d.info.uuid;}))discovered.push(d);
+  }catch(_){}
+});
+window.dispatchEvent(new Event('eip6963:requestProvider'));
 
 function pad(x){return x.replace(/^0x/,'').toLowerCase().padStart(64,'0');}
 function padN(n){return n.toString(16).padStart(64,'0');}
@@ -218,11 +253,49 @@ function updateCost(){
   document.getElementById('btnBuy').textContent=q===1n?'Buy Ticket':'Buy '+q.toString()+' Tickets';
 }
 
+// ---------- wallet picker modal ----------
+function walletLink(name,ico,href,hint){
+  return '<a class="wallet-opt" href="'+href+'" target="_blank" rel="noopener"><span class="wallet-ico">'+ico+'</span><span>'+name+(hint?'<div class="wallet-hint">'+hint+'</div>':'')+'</span></a>';
+}
+
+function openModal(){
+  // re-request announcements in case a wallet loaded late
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+  var inj=document.getElementById('injectedList');
+  var dl=document.getElementById('deepLinks');
+  inj.innerHTML='';
+  var opts=discovered.slice();
+  if(opts.length===0&&window.ethereum){
+    opts.push({info:{name:'Browser Wallet',icon:null,uuid:'legacy-injected'},provider:window.ethereum});
+  }
+  if(opts.length){
+    var subEl=document.createElement('div');subEl.className='modal-sub';subEl.textContent='Detected in this browser';
+    inj.appendChild(subEl);
+    opts.forEach(function(o){
+      var b=document.createElement('button');
+      b.className='wallet-opt';b.type='button';
+      var iconHtml=o.info.icon?'<img src="'+o.info.icon+'" alt="">':'<span class="wallet-ico">👛</span>';
+      b.innerHTML=iconHtml+'<span>'+o.info.name+'</span>';
+      b.addEventListener('click',function(){closeModal();connectWith(o.provider,o.info.name);});
+      inj.appendChild(b);
+    });
+  } else {
+    inj.innerHTML='<div class="modal-sub">No wallet detected in this browser</div><div style="color:#888;font-size:.85em;line-height:1.5;margin-bottom:6px">On desktop, install a wallet extension like MetaMask or Rabby, then reload. On mobile, tap a wallet below — it opens this page inside the wallet app, ready to connect.</div>';
+  }
+  dl.innerHTML='<div class="modal-sub">'+(opts.length?'Or open in a wallet app (mobile)':'Open in a wallet app')+'</div>'
+    +walletLink('MetaMask','🦊','https://metamask.app.link/dapp/bigebelieves.github.io/raffle-hood/','opens this site in the MetaMask app')
+    +walletLink('Coinbase Wallet','🔵','https://go.cb-w.com/dapp?cb_url='+encodeURIComponent(DAPP_URL),'opens this site in the Coinbase Wallet app')
+    +walletLink('Trust Wallet','🛡️','https://link.trustwallet.com/open_url?coin_id=60&url='+encodeURIComponent(DAPP_URL),'opens this site in the Trust Wallet app');
+  document.getElementById('modalBg').classList.add('open');
+}
+
+function closeModal(){document.getElementById('modalBg').classList.remove('open');}
+
 function ensureChain(){
-  return window.ethereum.request({method:'wallet_switchEthereumChain',params:[{chainId:CHAIN_HEX}]})
+  return provider.request({method:'wallet_switchEthereumChain',params:[{chainId:CHAIN_HEX}]})
   .catch(function(e){
     if(e.code===4902||(e.data&&e.data.originalError&&e.data.originalError.code===4902)){
-      return window.ethereum.request({method:'wallet_addEthereumChain',params:[{
+      return provider.request({method:'wallet_addEthereumChain',params:[{
         chainId:CHAIN_HEX,
         chainName:'Robinhood Chain',
         nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18},
@@ -233,10 +306,10 @@ function ensureChain(){
   });
 }
 
-function connect(){
-  if(!window.ethereum){setMsg('err','No wallet detected. Install MetaMask, Rabby, or Coinbase Wallet, then reload this page.');return;}
+function connectWith(p,name){
+  provider=p;
   clearMsg();
-  window.ethereum.request({method:'eth_requestAccounts'})
+  provider.request({method:'eth_requestAccounts'})
   .then(function(accs){
     account=accs[0];
     return ensureChain();
@@ -244,7 +317,7 @@ function connect(){
   .then(function(){
     document.getElementById('btnConnect').style.display='none';
     var pill=document.getElementById('walletPill');
-    pill.style.display='block';pill.textContent='connected: '+short(account);
+    pill.style.display='block';pill.textContent=(name?name+' · ':'')+short(account);
     document.getElementById('buySection').style.display='block';
     setMsg('info','Wallet connected on Robinhood Chain. Ready to buy.');
     loadBuyers();
@@ -256,7 +329,7 @@ function waitReceipt(hash){
   return new Promise(function(resolve,reject){
     var tries=0;
     (function poll(){
-      window.ethereum.request({method:'eth_getTransactionReceipt',params:[hash]})
+      provider.request({method:'eth_getTransactionReceipt',params:[hash]})
       .then(function(r){
         if(r){ if(r.status==='0x1')resolve(r); else reject(new Error('transaction reverted')); }
         else if(++tries>120) reject(new Error('timed out waiting for confirmation'));
@@ -267,11 +340,12 @@ function waitReceipt(hash){
 }
 
 function sendTx(to,data){
-  return window.ethereum.request({method:'eth_sendTransaction',params:[{from:account,to:to,data:data}]})
+  return provider.request({method:'eth_sendTransaction',params:[{from:account,to:to,data:data}]})
   .then(function(hash){setMsg('info','Transaction sent, waiting for confirmation…');return waitReceipt(hash);});
 }
 
 function buy(){
+  if(!provider||!account){setMsg('err','Connect a wallet first.');return;}
   var q=BigInt(Math.max(1,parseInt(document.getElementById('qty').value)||1));
   var cost=price*q;
   var btn=document.getElementById('btnBuy');
@@ -303,7 +377,9 @@ function buy(){
   .finally(function(){btn.disabled=false;});
 }
 
-document.getElementById('btnConnect').addEventListener('click',connect);
+document.getElementById('btnConnect').addEventListener('click',openModal);
+document.getElementById('modalClose').addEventListener('click',closeModal);
+document.getElementById('modalBg').addEventListener('click',function(e){if(e.target===this)closeModal();});
 document.getElementById('btnBuy').addEventListener('click',buy);
 document.getElementById('qty').addEventListener('input',updateCost);
 document.getElementById('qMinus').addEventListener('click',function(){var i=document.getElementById('qty');i.value=Math.max(1,(parseInt(i.value)||1)-1);updateCost();});
