@@ -295,6 +295,15 @@ function openModal(){
 
 function closeModal(){document.getElementById('modalBg').classList.remove('open');}
 
+function onConnected(name){
+  document.getElementById('btnConnect').style.display='none';
+  var pill=document.getElementById('walletPill');
+  pill.style.display='block';pill.textContent=(name?name+' · ':'')+short(account);
+  document.getElementById('buySection').style.display='block';
+  setMsg('info','Wallet connected. Make sure your wallet is on Robinhood Chain (id 4663) before buying.');
+  loadBuyers();
+}
+
 function connectWalletConnect(){
   setMsg('info','Loading WalletConnect…');
   var ready=wcProvider?Promise.resolve(wcProvider):import(WC_ESM).then(function(mod){
@@ -307,8 +316,26 @@ function connectWalletConnect(){
       metadata:{name:'Raffle Hood',description:'Buy USDG raffle tickets on Robinhood Chain — win a Bankr Club NFT',url:DAPP_URL,icons:['https://i2c.seadn.io/base/0x9fab8c51f911f0ba6dab64fd6e979bcf6424ce82/dcf043e704d43a9b385243cb0c776f/acdcf043e704d43a9b385243cb0c776f.gif']}
     }).then(function(p){wcProvider=p;return p;});
   });
-  ready.then(function(p){connectWith(p,'WalletConnect',true);})
-  .catch(function(e){setMsg('err','WalletConnect failed to load: '+(e&&e.message?e.message:e));});
+  ready.then(function(p){
+    provider=p;
+    setMsg('info','Approve the connection in your wallet…');
+    // WC providers need an explicit connect() session before any request()
+    var sess=(p.session&&p.accounts&&p.accounts.length)?Promise.resolve():p.connect();
+    return sess.then(function(){
+      account=(p.accounts&&p.accounts[0])||null;
+      if(account)return;
+      return p.request({method:'eth_accounts'}).then(function(a){account=a&&a[0];});
+    }).then(function(){
+      if(!account)throw new Error('no account returned by wallet');
+      return ensureChain().catch(function(){});
+    }).then(function(){onConnected('WalletConnect');});
+  })
+  .catch(function(e){
+    var m=e&&e.message?e.message:String(e);
+    if(/reset|reject|cancel|closed/i.test(m))m='Connection cancelled.';
+    setMsg('err','WalletConnect: '+m);
+    try{if(wcProvider&&!wcProvider.session)wcProvider=null;}catch(_){}
+  });
 }
 
 function ensureChain(){
@@ -334,14 +361,7 @@ function connectWith(p,name,lenientChain){
     account=accs[0];
     return lenientChain?ensureChain().catch(function(){}):ensureChain();
   })
-  .then(function(){
-    document.getElementById('btnConnect').style.display='none';
-    var pill=document.getElementById('walletPill');
-    pill.style.display='block';pill.textContent=(name?name+' · ':'')+short(account);
-    document.getElementById('buySection').style.display='block';
-    setMsg('info','Wallet connected. Make sure your wallet is on Robinhood Chain (id 4663) before buying.');
-    loadBuyers();
-  })
+  .then(function(){onConnected(name);})
   .catch(function(e){setMsg('err','Connection failed: '+(e.message||e));});
 }
 
