@@ -141,6 +141,9 @@ var ESCROW='0x9Dc6A206c09d4CF429D7A171A590c8bA2EE3b1EF';
 var USDG='0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168';
 var DEC=1000000n; // USDG has 6 decimals
 var DAPP_URL='https://bigebelieves.github.io/raffle-hood/';
+var WC_PROJECT_ID='8970cd9ed5eb0de88206ad00f50b813b';
+var WC_ESM='https://esm.sh/@walletconnect/ethereum-provider@2.23.10';
+var wcProvider=null;
 
 // function selectors (keccak-verified)
 var SEL={
@@ -276,20 +279,37 @@ function openModal(){
       b.className='wallet-opt';b.type='button';
       var iconHtml=o.info.icon?'<img src="'+o.info.icon+'" alt="">':'<span class="wallet-ico">👛</span>';
       b.innerHTML=iconHtml+'<span>'+o.info.name+'</span>';
-      b.addEventListener('click',function(){closeModal();connectWith(o.provider,o.info.name);});
+      b.addEventListener('click',function(){closeModal();connectWith(o.provider,o.info.name,false);});
       inj.appendChild(b);
     });
-  } else {
-    inj.innerHTML='<div class="modal-sub">No wallet detected in this browser</div><div style="color:#888;font-size:.85em;line-height:1.5;margin-bottom:6px">On desktop, install a wallet extension like MetaMask or Rabby, then reload. On mobile, tap a wallet below — it opens this page inside the wallet app, ready to connect.</div>';
   }
-  dl.innerHTML='<div class="modal-sub">'+(opts.length?'Or open in a wallet app (mobile)':'Open in a wallet app')+'</div>'
+  dl.innerHTML='<div class="modal-sub">'+(opts.length?'More options':'Connect a wallet')+'</div>'
+    +'<button class="wallet-opt" type="button" id="wcBtn"><span class="wallet-ico">🔗</span><span>WalletConnect<div class="wallet-hint">400+ wallets — QR code on desktop, wallet list on mobile (Rainbow, Zerion, OKX…)</div></span></button>'
+    +'<div class="modal-sub">Or open in a wallet app (mobile)</div>'
     +walletLink('MetaMask','🦊','https://metamask.app.link/dapp/bigebelieves.github.io/raffle-hood/','opens this site in the MetaMask app')
     +walletLink('Coinbase Wallet','🔵','https://go.cb-w.com/dapp?cb_url='+encodeURIComponent(DAPP_URL),'opens this site in the Coinbase Wallet app')
     +walletLink('Trust Wallet','🛡️','https://link.trustwallet.com/open_url?coin_id=60&url='+encodeURIComponent(DAPP_URL),'opens this site in the Trust Wallet app');
+  document.getElementById('wcBtn').addEventListener('click',function(){closeModal();connectWalletConnect();});
   document.getElementById('modalBg').classList.add('open');
 }
 
 function closeModal(){document.getElementById('modalBg').classList.remove('open');}
+
+function connectWalletConnect(){
+  setMsg('info','Loading WalletConnect…');
+  var ready=wcProvider?Promise.resolve(wcProvider):import(WC_ESM).then(function(mod){
+    var EP=mod.EthereumProvider||(mod.default&&mod.default.EthereumProvider)||mod.default;
+    return EP.init({
+      projectId:WC_PROJECT_ID,
+      optionalChains:[4663],
+      showQrModal:true,
+      rpcMap:{4663:RPC},
+      metadata:{name:'Raffle Hood',description:'Buy USDG raffle tickets on Robinhood Chain — win a Bankr Club NFT',url:DAPP_URL,icons:['https://i2c.seadn.io/base/0x9fab8c51f911f0ba6dab64fd6e979bcf6424ce82/dcf043e704d43a9b385243cb0c776f/acdcf043e704d43a9b385243cb0c776f.gif']}
+    }).then(function(p){wcProvider=p;return p;});
+  });
+  ready.then(function(p){connectWith(p,'WalletConnect',true);})
+  .catch(function(e){setMsg('err','WalletConnect failed to load: '+(e&&e.message?e.message:e));});
+}
 
 function ensureChain(){
   return provider.request({method:'wallet_switchEthereumChain',params:[{chainId:CHAIN_HEX}]})
@@ -306,20 +326,20 @@ function ensureChain(){
   });
 }
 
-function connectWith(p,name){
+function connectWith(p,name,lenientChain){
   provider=p;
   clearMsg();
   provider.request({method:'eth_requestAccounts'})
   .then(function(accs){
     account=accs[0];
-    return ensureChain();
+    return lenientChain?ensureChain().catch(function(){}):ensureChain();
   })
   .then(function(){
     document.getElementById('btnConnect').style.display='none';
     var pill=document.getElementById('walletPill');
     pill.style.display='block';pill.textContent=(name?name+' · ':'')+short(account);
     document.getElementById('buySection').style.display='block';
-    setMsg('info','Wallet connected on Robinhood Chain. Ready to buy.');
+    setMsg('info','Wallet connected. Make sure your wallet is on Robinhood Chain (id 4663) before buying.');
     loadBuyers();
   })
   .catch(function(e){setMsg('err','Connection failed: '+(e.message||e));});
@@ -350,7 +370,7 @@ function buy(){
   var cost=price*q;
   var btn=document.getElementById('btnBuy');
   btn.disabled=true;
-  ensureChain()
+  Promise.resolve()
   .then(function(){return rpcRead(USDG,SEL.balanceOf+pad(account));})
   .then(function(balHex){
     if(word(balHex)<cost)throw new Error('Insufficient USDG: you have '+fmt(word(balHex))+', need '+fmt(cost));
