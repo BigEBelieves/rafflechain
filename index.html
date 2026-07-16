@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Raffle Hood — Buy Tickets</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0f;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh}
+.container{max-width:560px;margin:0 auto;padding:20px}
+.header{text-align:center;padding:30px 0 10px}
+.header h1{font-size:2.2em;font-weight:800;letter-spacing:-1px;color:#00C805;text-shadow:0 0 20px rgba(0,200,5,.3)}
+.header p{color:#888;font-size:.95em;margin-top:6px}
+.card{background:linear-gradient(135deg,#111118,#1a1a2e);border:1px solid #222;border-radius:16px;padding:20px;margin:16px 0}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat-box{background:#0d0d14;border:1px solid #222;border-radius:12px;padding:14px;text-align:center}
+.stat-val{font-size:1.3em;font-weight:700;color:#fff}
+.stat-lbl{font-size:.75em;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+.bar-wrap{background:#0d0d14;border-radius:8px;height:10px;margin:16px 0 6px;overflow:hidden}
+.bar{background:linear-gradient(90deg,#00C805,#00ff88);height:100%;width:0%;transition:width .6s}
+.bar-lbl{font-size:.8em;color:#888;text-align:center}
+button{width:100%;padding:14px;border:none;border-radius:12px;font-size:1em;font-weight:700;cursor:pointer;margin-top:12px}
+.btn-green{background:#00C805;color:#000}
+.btn-green:disabled{background:#1a3a1a;color:#557755;cursor:not-allowed}
+.btn-dark{background:#1a1a2e;color:#e0e0e0;border:1px solid #333}
+.qty-row{display:flex;align-items:center;gap:12px;margin-top:14px}
+.qty-row input{flex:1;background:#0d0d14;border:1px solid #333;border-radius:10px;color:#fff;font-size:1.1em;padding:12px;text-align:center}
+.qty-btn{width:48px;height:48px;flex-shrink:0;background:#1a1a2e;border:1px solid #333;border-radius:10px;color:#fff;font-size:1.3em;cursor:pointer;margin:0;padding:0}
+.msg{margin-top:12px;padding:12px;border-radius:10px;font-size:.9em;display:none;word-break:break-word}
+.msg.info{display:block;background:#101a2e;border:1px solid #1e3a5f;color:#7fb3ff}
+.msg.ok{display:block;background:#0d2412;border:1px solid #1e5f2e;color:#7fff9f}
+.msg.err{display:block;background:#2e1010;border:1px solid #5f1e1e;color:#ff7f7f}
+.addr{font-family:monospace;font-size:.85em;color:#00ccff}
+.wallet-pill{background:#0d0d14;border:1px solid #222;border-radius:20px;padding:8px 14px;font-family:monospace;font-size:.85em;color:#00ff88;text-align:center;margin-top:10px;display:none}
+.foot{color:#555;font-size:.75em;text-align:center;padding:20px 0;line-height:1.6}
+.deadline{color:#ffaa44}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>🎩 Raffle Hood</h1>
+    <p>Buy USDG raffle tickets on Robinhood Chain — win a Bankr Club NFT</p>
+  </div>
+
+  <div class="card">
+    <div class="stats-grid">
+      <div class="stat-box"><div class="stat-val" id="sTickets">—</div><div class="stat-lbl">Tickets Sold</div></div>
+      <div class="stat-box"><div class="stat-val" id="sRaised">—</div><div class="stat-lbl">USDG Raised</div></div>
+      <div class="stat-box"><div class="stat-val" id="sPrice">—</div><div class="stat-lbl">Ticket Price</div></div>
+      <div class="stat-box"><div class="stat-val deadline" id="sDeadline">—</div><div class="stat-lbl">Deadline</div></div>
+    </div>
+    <div class="bar-wrap"><div class="bar" id="bar"></div></div>
+    <div class="bar-lbl" id="barLbl">loading…</div>
+  </div>
+
+  <div class="card">
+    <button class="btn-green" id="btnConnect">Connect Wallet</button>
+    <div class="wallet-pill" id="walletPill"></div>
+    <div id="buySection" style="display:none">
+      <div class="qty-row">
+        <button class="qty-btn" id="qMinus">−</button>
+        <input id="qty" type="number" min="1" max="100" value="1">
+        <button class="qty-btn" id="qPlus">+</button>
+      </div>
+      <button class="btn-green" id="btnBuy">Buy Ticket</button>
+      <div style="color:#888;font-size:.85em;text-align:center;margin-top:10px" id="costLbl"></div>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="foot">
+    Escrow contract: <span class="addr">0x9Dc6A206c09d4CF429D7A171A590c8bA2EE3b1EF</span><br>
+    USDG token: <span class="addr">0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168</span><br>
+    Robinhood Chain (id 4663). You need USDG for tickets + a small amount of ETH on Robinhood Chain for gas.<br>
+    If the minimum isn't met by the deadline, buyers can call refund() on the contract to get their USDG back.
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var RPC='https://rpc.mainnet.chain.robinhood.com';
+var CHAIN_HEX='0x1237'; // 4663
+var ESCROW='0x9Dc6A206c09d4CF429D7A171A590c8bA2EE3b1EF';
+var USDG='0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168';
+var DEC=1000000n; // USDG has 6 decimals
+
+// function selectors (keccak-verified)
+var SEL={
+  status:'0x200d2ed2',
+  ticketPrice:'0x1209b1f6',
+  minRevenue:'0x491532bc',
+  deadline:'0x29dcb0cf',
+  buyersCount:'0xba49a08c',
+  minimumMet:'0x667b807e',
+  buyTickets:'0x2f366637',
+  approve:'0x095ea7b3',
+  allowance:'0xdd62ed3e',
+  balanceOf:'0x70a08231'
+};
+
+var account=null, price=0n, minRev=0n, raised=0n;
+
+function pad(x){return x.replace(/^0x/,'').toLowerCase().padStart(64,'0');}
+function padN(n){return n.toString(16).padStart(64,'0');}
+function word(hex,i){i=i||0;return BigInt('0x'+hex.replace(/^0x/,'').slice(i*64,(i+1)*64||undefined).slice(0,64));}
+function fmt(v){var w=v/DEC,f=(v%DEC).toString().padStart(6,'0').replace(/0+$/,'');return w.toString()+(f?'.'+f:'');}
+function short(a){return a.slice(0,6)+'…'+a.slice(-4);}
+
+function rpcRead(to,data){
+  return fetch(RPC,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_call',params:[{to:to,data:data},'latest']})})
+    .then(function(r){return r.json();})
+    .then(function(j){if(j.error)throw new Error(j.error.message);return j.result;});
+}
+
+function setMsg(cls,text){var m=document.getElementById('msg');m.className='msg '+cls;m.textContent=text;}
+function clearMsg(){document.getElementById('msg').className='msg';}
+
+function loadStats(){
+  return Promise.all([
+    rpcRead(ESCROW,SEL.status),
+    rpcRead(ESCROW,SEL.ticketPrice),
+    rpcRead(ESCROW,SEL.minRevenue),
+    rpcRead(ESCROW,SEL.deadline),
+    rpcRead(ESCROW,SEL.buyersCount)
+  ]).then(function(res){
+    raised=word(res[0],0);
+    price=word(res[1]);
+    minRev=word(res[2]);
+    var dl=Number(word(res[3]));
+    var buyers=word(res[4]);
+    var tickets=price>0n?raised/price:0n;
+    document.getElementById('sTickets').textContent=tickets.toString()+' ('+buyers.toString()+' buyers)';
+    document.getElementById('sRaised').textContent=fmt(raised);
+    document.getElementById('sPrice').textContent=fmt(price)+' USDG';
+    var d=new Date(dl*1000);
+    document.getElementById('sDeadline').textContent=d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+    var pct=minRev>0n?Number(raised*100n/minRev):0;
+    document.getElementById('bar').style.width=Math.min(pct,100)+'%';
+    document.getElementById('barLbl').textContent=fmt(raised)+' / '+fmt(minRev)+' USDG minimum ('+pct+'%)';
+    updateCost();
+  }).catch(function(e){
+    document.getElementById('barLbl').textContent='could not load raffle data: '+e.message;
+  });
+}
+
+function updateCost(){
+  var q=BigInt(Math.max(1,parseInt(document.getElementById('qty').value)||1));
+  document.getElementById('costLbl').textContent='Total: '+fmt(price*q)+' USDG';
+  document.getElementById('btnBuy').textContent=q===1n?'Buy Ticket':'Buy '+q.toString()+' Tickets';
+}
+
+function ensureChain(){
+  return window.ethereum.request({method:'wallet_switchEthereumChain',params:[{chainId:CHAIN_HEX}]})
+  .catch(function(e){
+    if(e.code===4902||(e.data&&e.data.originalError&&e.data.originalError.code===4902)){
+      return window.ethereum.request({method:'wallet_addEthereumChain',params:[{
+        chainId:CHAIN_HEX,
+        chainName:'Robinhood Chain',
+        nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18},
+        rpcUrls:[RPC]
+      }]});
+    }
+    throw e;
+  });
+}
+
+function connect(){
+  if(!window.ethereum){setMsg('err','No wallet detected. Install MetaMask, Rabby, or Coinbase Wallet, then reload this page.');return;}
+  clearMsg();
+  window.ethereum.request({method:'eth_requestAccounts'})
+  .then(function(accs){
+    account=accs[0];
+    return ensureChain();
+  })
+  .then(function(){
+    document.getElementById('btnConnect').style.display='none';
+    var pill=document.getElementById('walletPill');
+    pill.style.display='block';pill.textContent='connected: '+short(account);
+    document.getElementById('buySection').style.display='block';
+    setMsg('info','Wallet connected on Robinhood Chain. Ready to buy.');
+  })
+  .catch(function(e){setMsg('err','Connection failed: '+(e.message||e));});
+}
+
+function waitReceipt(hash){
+  return new Promise(function(resolve,reject){
+    var tries=0;
+    (function poll(){
+      window.ethereum.request({method:'eth_getTransactionReceipt',params:[hash]})
+      .then(function(r){
+        if(r){ if(r.status==='0x1')resolve(r); else reject(new Error('transaction reverted')); }
+        else if(++tries>120) reject(new Error('timed out waiting for confirmation'));
+        else setTimeout(poll,2000);
+      }).catch(reject);
+    })();
+  });
+}
+
+function sendTx(to,data){
+  return window.ethereum.request({method:'eth_sendTransaction',params:[{from:account,to:to,data:data}]})
+  .then(function(hash){setMsg('info','Transaction sent, waiting for confirmation…');return waitReceipt(hash);});
+}
+
+function buy(){
+  var q=BigInt(Math.max(1,parseInt(document.getElementById('qty').value)||1));
+  var cost=price*q;
+  var btn=document.getElementById('btnBuy');
+  btn.disabled=true;
+  ensureChain()
+  .then(function(){return rpcRead(USDG,SEL.balanceOf+pad(account));})
+  .then(function(balHex){
+    if(word(balHex)<cost)throw new Error('Insufficient USDG: you have '+fmt(word(balHex))+', need '+fmt(cost));
+    return rpcRead(USDG,SEL.allowance+pad(account)+pad(ESCROW));
+  })
+  .then(function(alHex){
+    if(word(alHex)>=cost)return null;
+    setMsg('info','Step 1/2: approve '+fmt(cost)+' USDG in your wallet…');
+    return sendTx(USDG,SEL.approve+pad(ESCROW)+padN(cost));
+  })
+  .then(function(){
+    setMsg('info','Step 2/2: confirm the ticket purchase in your wallet…');
+    return sendTx(ESCROW,SEL.buyTickets+padN(q));
+  })
+  .then(function(){
+    setMsg('ok','🎟️ Success! You bought '+q.toString()+' ticket'+(q>1n?'s':'')+' for '+fmt(cost)+' USDG. Good luck!');
+    return loadStats();
+  })
+  .catch(function(e){
+    var m=e&&e.message?e.message:String(e);
+    if(e&&e.code===4001)m='Transaction rejected in wallet.';
+    setMsg('err',m);
+  })
+  .finally(function(){btn.disabled=false;});
+}
+
+document.getElementById('btnConnect').addEventListener('click',connect);
+document.getElementById('btnBuy').addEventListener('click',buy);
+document.getElementById('qty').addEventListener('input',updateCost);
+document.getElementById('qMinus').addEventListener('click',function(){var i=document.getElementById('qty');i.value=Math.max(1,(parseInt(i.value)||1)-1);updateCost();});
+document.getElementById('qPlus').addEventListener('click',function(){var i=document.getElementById('qty');i.value=Math.min(100,(parseInt(i.value)||1)+1);updateCost();});
+
+loadStats();
+setInterval(loadStats,30000);
+})();
+</script>
+</body>
+</html>
