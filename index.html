@@ -45,6 +45,7 @@ button{width:100%;padding:14px;border:none;border-radius:12px;font-size:1em;font
 .buyer-you{color:#00ff88;font-size:.75em;margin-left:8px}
 .buyer-tickets{color:#fff;font-weight:700;font-size:.9em;white-space:nowrap}
 .buyer-usdg{color:#888;font-size:.75em;text-align:right}
+.buyer-tag{color:#ffaa44;font-size:.7em;margin-left:6px}
 .foot{color:#555;font-size:.75em;text-align:center;padding:20px 0;line-height:1.6}
 .deadline{color:#ffaa44}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:flex-end;justify-content:center;z-index:100}
@@ -143,11 +144,10 @@ var DEC=1000000n; // USDG has 6 decimals
 var DAPP_URL='https://bigebelieves.github.io/raffle-hood/';
 var WC_PROJECT_ID='8970cd9ed5eb0de88206ad00f50b813b';
 var WC_ESM='https://esm.sh/@walletconnect/ethereum-provider@2.23.10';
+var BLOCKSCOUT='https://robinhoodchain.blockscout.com/api/v2';
 var wcProvider=null;
 
 // WalletConnect registry IDs — pinned to the top of the WC modal wallet list
-// note: Base app (formerly Coinbase Wallet) has NO mobile deep link in the WC registry,
-// so the WC modal cannot list it on mobile — Base app users use the deep link button instead.
 var WC_RECOMMENDED=[
   '8837dd9413b1d9b585ee937d27a816590248386d9dbf59f5cd3422dbbb65683e', // Robinhood Wallet
   '18388be9ac2d02726dbac9777c96efaac06d744b2f6d580fccdd4127a6d01fd1', // Rabby
@@ -178,8 +178,9 @@ var SEL={
 };
 
 var account=null, provider=null, price=0n, minRev=0n, raised=0n;
+var offchainBuyers=[]; // credits from raw USDG transfers not registered via buyTickets()
 
-// EIP-6963 multi-wallet discovery — wallets announce themselves with name + icon
+// EIP-6963 multi-wallet discovery
 var discovered=[];
 window.addEventListener('eip6963:announceProvider',function(e){
   try{
@@ -212,8 +213,68 @@ function rpcRead(to,data){
 function setMsg(cls,text){var m=document.getElementById('msg');m.className='msg '+cls;m.textContent=text;}
 function clearMsg(){document.getElementById('msg').className='msg';}
 
-function loadStats(){
-  return Promise.all([
+// ---------- offchain credit detection via Blockscout ----------
+// Fetches all USDG token transfers TO the escrow from Blockscout.
+// Compares each sender's total transferred USDG with their on-chain registered tickets.
+// Any excess = raw transfer not registered via buyTickets() = offchain credit.
+function loadOffchainCredits(onchainBuyers){
+  return fetch(BLOCKSCOUT+'/addresses/'+ESCROW+'/token-transfers?type=ERC-20&filter=to')
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(!data||!data.items)return[];
+
+      // Build on-chain map: addr(lowercase) -> {tickets, usdg}
+      var onchainMap={};
+      onchainBuyers.forEach(function(b){
+        onchainMap[b.addr.toLowerCase()]={tickets:b.tickets,usdg:BigInt(b.tickets)*price};
+      });
+
+      // Group all USDG transfers by sender
+      var bySender={};
+      data.items.forEach(function(item){
+        var tokenAddr=item.token&&item.token.address;
+        if(!tokenAddr||tokenAddr.toLowerCase()!==USDG.toLowerCase())return;
+        var from=item.from&&item.from.hash;
+        if(!from)return;
+        from=from.toLowerCase();
+        var val=BigInt(item.value||'0');
+        if(!bySender[from])bySender[from]={total:0n,txHash:item.tx_hash};
+        bySender[from].total+=val;
+        bySender[from].txHash=item.tx_hash;
+      });
+
+      // Compute offchain credits
+      var credits=[];
+      Object.keys(bySender).forEach(function(addr){
+        var totalSent=bySender[addr].total;
+        var onchain=onchainMap[addr]||{tickets:0,usdg:0n};
+        var extraUsdg=totalSent-onchain.usdg;
+        if(extraUsdg>0n&&price>0n){
+          var extraTickets=Number(extraUsdg/price);
+          if(extraTickets>0){
+            credits.push({
+              addr:addr,
+              tickets:extraTickets,
+              usdg:extraUsdg,
+              txHash:bySender[addr].txHash,
+              offchain:true
+            });
+          }
+        }
+      });
+
+      return credits;
+    })
+    .catch(function(e){
+      // Blockscout unavailable — show on-chain only
+      return[];
+    });
+}
+
+// ---------- merged stats + buyer list ----------
+function refreshAll(){
+  // Step 1: Load on-chain stats
+  Promise.all([
     rpcRead(ESCROW,SEL.status),
     rpcRead(ESCROW,SEL.ticketPrice),
     rpcRead(ESCROW,SEL.minRevenue),
@@ -224,47 +285,64 @@ function loadStats(){
     price=word(res[1]);
     minRev=word(res[2]);
     var dl=Number(word(res[3]));
-    var buyers=word(res[4]);
-    var tickets=price>0n?raised/price:0n;
-    document.getElementById('sTickets').textContent=tickets.toString()+' ('+buyers.toString()+' buyers)';
-    document.getElementById('sRaised').textContent=fmt(raised);
-    document.getElementById('sPrice').textContent=fmt(price)+' USDG';
-    var d=new Date(dl*1000);
-    document.getElementById('sDeadline').textContent=d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
-    var pct=minRev>0n?Number(raised*100n/minRev):0;
-    document.getElementById('bar').style.width=Math.min(pct,100)+'%';
-    document.getElementById('barLbl').textContent=fmt(raised)+' / '+fmt(minRev)+' USDG minimum ('+pct+'%)';
-    updateCost();
+    var onchainBuyersCount=word(res[4]);
+    var onchainTickets=price>0n?raised/price:0n;
+
+    // Step 2: Load on-chain buyers
+    return rpcRead(ESCROW,SEL.getBuyers+padN(0n)+padN(200n)).then(function(hex){
+      var addrs=decodeAddrArray(hex);
+      return Promise.all(addrs.map(function(a){
+        return rpcRead(ESCROW,SEL.ticketsOf+pad(a)).then(function(t){
+          return{addr:a,tickets:Number(word(t)),offchain:false};
+        });
+      })).then(function(onchainBuyers){
+        // Step 3: Load offchain credits from Blockscout
+        return loadOffchainCredits(onchainBuyers).then(function(credits){
+          offchainBuyers=credits;
+
+          // Step 4: Display merged stats
+          var offTickets=credits.reduce(function(s,c){return s+c.tickets;},0);
+          var offUsdg=credits.reduce(function(s,c){return s+c.usdg;},0n);
+          var totalTickets=Number(onchainTickets)+offTickets;
+          var totalRaised=raised+offUsdg;
+          var totalBuyers=Number(onchainBuyersCount)+credits.length;
+
+          document.getElementById('sTickets').textContent=totalTickets.toString()+' ('+totalBuyers.toString()+' buyers)';
+          document.getElementById('sRaised').textContent=fmt(totalRaised);
+          document.getElementById('sPrice').textContent=fmt(price)+' USDG';
+          var d=new Date(dl*1000);
+          document.getElementById('sDeadline').textContent=d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+          var pct=minRev>0n?Number(totalRaised*100n/minRev):0;
+          document.getElementById('bar').style.width=Math.min(pct,100)+'%';
+          document.getElementById('barLbl').textContent=fmt(totalRaised)+' / '+fmt(minRev)+' USDG minimum ('+pct+'%)';
+          updateCost();
+
+          // Step 5: Display merged buyer list
+          displayBuyers(onchainBuyers.concat(credits));
+        });
+      });
+    });
   }).catch(function(e){
     document.getElementById('barLbl').textContent='could not load raffle data: '+e.message;
   });
 }
 
-function loadBuyers(){
+function displayBuyers(allBuyers){
   var listEl=document.getElementById('buyersList');
-  rpcRead(ESCROW,SEL.getBuyers+padN(0n)+padN(200n))
-  .then(function(hex){
-    var addrs=decodeAddrArray(hex);
-    if(addrs.length===0){listEl.textContent='no tickets sold yet — be the first!';return;}
-    return Promise.all(addrs.map(function(a){
-      return rpcRead(ESCROW,SEL.ticketsOf+pad(a)).then(function(t){return {addr:a,tickets:word(t)};});
-    })).then(function(rows){
-      rows.sort(function(a,b){return b.tickets>a.tickets?1:(b.tickets<a.tickets?-1:0);});
-      listEl.style.color='';listEl.style.fontSize='';
-      listEl.innerHTML=rows.map(function(r){
-        var isYou=account&&r.addr.toLowerCase()===account.toLowerCase();
-        return '<div class="buyer-row'+(isYou?' you':'')+'">'
-          +'<div><span class="buyer-addr">'+short(r.addr)+'</span>'+(isYou?'<span class="buyer-you">(you)</span>':'')+'</div>'
-          +'<div style="text-align:right"><div class="buyer-tickets">'+r.tickets.toString()+' 🎟️</div>'
-          +'<div class="buyer-usdg">'+fmt(r.tickets*price)+' USDG</div></div>'
-          +'</div>';
-      }).join('');
-    });
-  })
-  .catch(function(e){listEl.textContent='could not load ticket holders: '+e.message;});
-}
+  if(allBuyers.length===0){listEl.textContent='no tickets sold yet — be the first!';return;}
 
-function refreshAll(){loadStats().then(loadBuyers);}
+  allBuyers.sort(function(a,b){return b.tickets>a.tickets?1:(b.tickets<a.tickets?-1:0);});
+  listEl.style.color='';listEl.style.fontSize='';
+  listEl.innerHTML=allBuyers.map(function(r){
+    var isYou=account&&r.addr.toLowerCase()===account.toLowerCase();
+    var tag=r.offchain?'<span class="buyer-tag">⚡ timeline</span>':'';
+    return '<div class="buyer-row'+(isYou?' you':'')+'">'
+      +'<div><span class="buyer-addr">'+short(r.addr)+'</span>'+tag+(isYou?'<span class="buyer-you">(you)</span>':'')+'</div>'
+      +'<div style="text-align:right"><div class="buyer-tickets">'+r.tickets.toString()+' 🎟️</div>'
+      +'<div class="buyer-usdg">'+fmt(BigInt(r.tickets)*price)+' USDG</div></div>'
+      +'</div>';
+  }).join('');
+}
 
 function updateCost(){
   var q=BigInt(Math.max(1,parseInt(document.getElementById('qty').value)||1));
@@ -278,7 +356,6 @@ function walletLink(name,ico,href,hint){
 }
 
 function openModal(){
-  // re-request announcements in case a wallet loaded late
   window.dispatchEvent(new Event('eip6963:requestProvider'));
   var inj=document.getElementById('injectedList');
   var dl=document.getElementById('deepLinks');
@@ -317,7 +394,7 @@ function onConnected(name){
   pill.style.display='block';pill.textContent=(name?name+' · ':'')+short(account);
   document.getElementById('buySection').style.display='block';
   setMsg('info','Wallet connected. Make sure your wallet is on Robinhood Chain (id 4663) before buying.');
-  loadBuyers();
+  refreshAll();
 }
 
 function connectWalletConnect(){
@@ -339,7 +416,6 @@ function connectWalletConnect(){
   ready.then(function(p){
     provider=p;
     setMsg('info','Approve the connection in your wallet…');
-    // WC providers need an explicit connect() session before any request()
     var sess=(p.session&&p.accounts&&p.accounts.length)?Promise.resolve():p.connect();
     return sess.then(function(){
       account=(p.accounts&&p.accounts[0])||null;
