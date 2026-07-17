@@ -69,7 +69,7 @@ button{width:100%;padding:14px;border:none;border-radius:12px;font-size:1em;font
 <div class="container">
   <div class="header">
     <h1>🎩 Raffle Hood</h1>
-    <p>Buy USDG raffle tickets on Robinhood Chain — win a Bankr Club NFT</p>
+    <p>Buy USDC or USDG raffle tickets on Robinhood Chain — win a Bankr Club NFT</p>
   </div>
 
   <div class="card">
@@ -87,7 +87,7 @@ button{width:100%;padding:14px;border:none;border-radius:12px;font-size:1em;font
   <div class="card">
     <div class="stats-grid">
       <div class="stat-box"><div class="stat-val" id="sTickets">—</div><div class="stat-lbl">Tickets Sold</div></div>
-      <div class="stat-box"><div class="stat-val" id="sRaised">—</div><div class="stat-lbl">USDG Raised</div></div>
+      <div class="stat-box"><div class="stat-val" id="sRaised">—</div><div class="stat-lbl">USDC or USDG Raised</div></div>
       <div class="stat-box"><div class="stat-val" id="sPrice">—</div><div class="stat-lbl">Ticket Price</div></div>
       <div class="stat-box"><div class="stat-val deadline" id="sDeadline">—</div><div class="stat-lbl">Deadline</div></div>
     </div>
@@ -118,8 +118,8 @@ button{width:100%;padding:14px;border:none;border-radius:12px;font-size:1em;font
   <div class="foot">
     Escrow contract: <span class="addr">0x9Dc6A206c09d4CF429D7A171A590c8bA2EE3b1EF</span><br>
     USDG token: <span class="addr">0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168</span><br>
-    Robinhood Chain (id 4663). You need USDG for tickets + a small amount of ETH on Robinhood Chain for gas.<br>
-    If the minimum isn't met by the deadline, buyers can call refund() on the contract to get their USDG back.
+    Robinhood Chain (id 4663). You need USDC or USDG for tickets + a small amount of ETH on Robinhood Chain for gas.<br>
+    If the minimum isn't met by the deadline, buyers can call refund() on the contract to get their USDC or USDG back.
   </div>
 </div>
 
@@ -317,12 +317,12 @@ function refreshAll(){
 
           document.getElementById('sTickets').textContent=totalTickets.toString()+' ('+totalBuyers.toString()+' buyers)';
           document.getElementById('sRaised').textContent=fmt(totalRaised);
-          document.getElementById('sPrice').textContent=fmt(price)+' USDG';
+          document.getElementById('sPrice').textContent=fmt(price)+' USDC or USDG';
           var d=new Date(dl*1000);
           document.getElementById('sDeadline').textContent=d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
           var pct=minRev>0n?Number(totalRaised*100n/minRev):0;
           document.getElementById('bar').style.width=Math.min(pct,100)+'%';
-          document.getElementById('barLbl').textContent=fmt(totalRaised)+' / '+fmt(minRev)+' USDG minimum ('+pct+'%)';
+          document.getElementById('barLbl').textContent=fmt(totalRaised)+' / '+fmt(minRev)+' USDC or USDG minimum ('+pct+'%)';
           updateCost();
 
           // Step 5: Display merged buyer list
@@ -349,14 +349,14 @@ function displayBuyers(allBuyers){
     return '<div class="buyer-row'+(isYou?' you':'')+'">'
       +'<div>'+handleHtml+'<span class="buyer-addr">'+short(r.addr)+'</span>'+tag+(isYou?'<span class="buyer-you">(you)</span>':'')+'</div>'
       +'<div style="text-align:right"><div class="buyer-tickets">'+r.tickets.toString()+' 🎟️</div>'
-      +'<div class="buyer-usdg">'+fmt(BigInt(r.tickets)*price)+' USDG</div></div>'
+      +'<div class="buyer-usdg">'+fmt(BigInt(r.tickets)*price)+' USDC or USDG</div></div>'
       +'</div>';
   }).join('');
 }
 
 function updateCost(){
   var q=BigInt(Math.max(1,parseInt(document.getElementById('qty').value)||1));
-  document.getElementById('costLbl').textContent='Total: '+fmt(price*q)+' USDG';
+  document.getElementById('costLbl').textContent='Total: '+fmt(price*q)+' USDC or USDG';
   document.getElementById('btnBuy').textContent=q===1n?'Buy Ticket':'Buy '+q.toString()+' Tickets';
 }
 
@@ -420,7 +420,7 @@ function connectWalletConnect(){
         themeMode:'dark',
         explorerRecommendedWalletIds:WC_RECOMMENDED
       },
-      metadata:{name:'Raffle Hood',description:'Buy USDG raffle tickets on Robinhood Chain — win a Bankr Club NFT',url:DAPP_URL,icons:['https://i2c.seadn.io/base/0x9fab8c51f911f0ba6dab64fd6e979bcf6424ce82/dcf043e704d43a9b385243cb0c776f/acdcf043e704d43a9b385243cb0c776f.gif']}
+      metadata:{name:'Raffle Hood',description:'Buy USDC or USDG raffle tickets on Robinhood Chain — win a Bankr Club NFT',url:DAPP_URL,icons:['https://i2c.seadn.io/base/0x9fab8c51f911f0ba6dab64fd6e979bcf6424ce82/dcf043e704d43a9b385243cb0c776f/acdcf043e704d43a9b385243cb0c776f.gif']}
     }).then(function(p){wcProvider=p;return p;});
   });
   ready.then(function(p){
@@ -499,12 +499,12 @@ function buy(){
   Promise.resolve()
   .then(function(){return rpcRead(USDG,SEL.balanceOf+pad(account));})
   .then(function(balHex){
-    if(word(balHex)<cost)throw new Error('Insufficient USDG: you have '+fmt(word(balHex))+', need '+fmt(cost));
+    if(word(balHex)<cost)throw new Error('Insufficient USDC or USDG: you have '+fmt(word(balHex))+', need '+fmt(cost));
     return rpcRead(USDG,SEL.allowance+pad(account)+pad(ESCROW));
   })
   .then(function(alHex){
     if(word(alHex)>=cost)return null;
-    setMsg('info','Step 1/2: approve '+fmt(cost)+' USDG in your wallet…');
+    setMsg('info','Step 1/2: approve '+fmt(cost)+' USDC or USDG in your wallet…');
     return sendTx(USDG,SEL.approve+pad(ESCROW)+padN(cost));
   })
   .then(function(){
@@ -512,7 +512,7 @@ function buy(){
     return sendTx(ESCROW,SEL.buyTickets+padN(q));
   })
   .then(function(){
-    setMsg('ok','🎟️ Success! You bought '+q.toString()+' ticket'+(q>1n?'s':'')+' for '+fmt(cost)+' USDG. Good luck!');
+    setMsg('ok','🎟️ Success! You bought '+q.toString()+' ticket'+(q>1n?'s':'')+' for '+fmt(cost)+' USDC or USDG. Good luck!');
     return refreshAll();
   })
   .catch(function(e){
