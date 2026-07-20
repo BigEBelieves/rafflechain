@@ -19,6 +19,9 @@ body{background:#0a0a0f;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFo
 .prize-sub{color:#888;font-size:.85em;margin-top:4px;line-height:1.5}
 .prize-link{display:inline-block;margin-top:8px;color:#00ccff;font-size:.85em;text-decoration:none}
 .prize-link:hover{text-decoration:underline}
+.chain-tabs{display:flex;gap:10px;margin-bottom:14px}
+.chain-tab{flex:1;padding:12px;border:1px solid #333;border-radius:12px;background:#0d0d14;color:#888;font-weight:700;font-size:.95em;cursor:pointer;margin:0}
+.chain-tab.active{border-color:#00C805;color:#00ff88;background:#0d1a10}
 .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .stat-box{background:#0d0d14;border:1px solid #222;border-radius:12px;padding:14px;text-align:center}
 .stat-val{font-size:1.3em;font-weight:700;color:#fff}
@@ -29,10 +32,15 @@ body{background:#0a0a0f;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFo
 button{width:100%;padding:14px;border:none;border-radius:12px;font-size:1em;font-weight:700;cursor:pointer;margin-top:12px}
 .btn-green{background:#00C805;color:#000}
 .btn-green:disabled{background:#1a3a1a;color:#557755;cursor:not-allowed}
+.btn-orange{background:#ffaa44;color:#000}
 .btn-dark{background:#1a1a2e;color:#e0e0e0;border:1px solid #333}
 .qty-row{display:flex;align-items:center;gap:12px;margin-top:14px}
 .qty-row input{flex:1;background:#0d0d14;border:1px solid #333;border-radius:10px;color:#fff;font-size:1.1em;padding:12px;text-align:center}
 .qty-btn{width:48px;height:48px;flex-shrink:0;background:#1a1a2e;border:1px solid #333;border-radius:10px;color:#fff;font-size:1.3em;cursor:pointer;margin:0;padding:0}
+.gift-row{display:flex;align-items:center;gap:10px;margin-top:14px;color:#ccc;font-size:.9em}
+.gift-row input[type=checkbox]{width:18px;height:18px;accent-color:#00C805}
+.addr-input{width:100%;background:#0d0d14;border:1px solid #333;border-radius:10px;color:#fff;font-size:.9em;font-family:monospace;padding:12px;margin-top:10px;display:none}
+.addr-input.show{display:block}
 .msg{margin-top:12px;padding:12px;border-radius:10px;font-size:.9em;display:none;word-break:break-word}
 .msg.info{display:block;background:#101a2e;border:1px solid #1e3a5f;color:#7fb3ff}
 .msg.ok{display:block;background:#0d2412;border:1px solid #1e5f2e;color:#7fff9f}
@@ -69,7 +77,7 @@ button{width:100%;padding:14px;border:none;border-radius:12px;font-size:1em;font
 <div class="container">
   <div class="header">
     <h1>🎩 Raffle Hood</h1>
-    <p>Buy USDC or USDG raffle tickets on Robinhood Chain — win a Bankr Club NFT</p>
+    <p>Buy raffle tickets with USDG (Robinhood Chain) or USDC (Base) — win a Bankr Club NFT</p>
   </div>
 
   <div class="card">
@@ -78,16 +86,20 @@ button{width:100%;padding:14px;border:none;border-radius:12px;font-size:1em;font
       <img class="prize-img" src="https://i2c.seadn.io/base/0x9fab8c51f911f0ba6dab64fd6e979bcf6424ce82/dcf043e704d43a9b385243cb0c776f/acdcf043e704d43a9b385243cb0c776f.gif" alt="Bankr Club #546">
       <div>
         <div class="prize-name">Bankr Club #546</div>
-        <div class="prize-sub">Bankr Club membership NFT on Base. Winner is drawn verifiably at random after the deadline — the NFT is transferred to the winning ticket holder.</div>
+        <div class="prize-sub">Bankr Club membership NFT on Base. Winner is drawn verifiably at random after the deadline — the NFT is transferred to the winning ticket holder. Gifted tickets count for the person who holds them.</div>
         <a class="prize-link" href="https://opensea.io/item/base/0x9fab8c51f911f0ba6dab64fd6e979bcf6424ce82/546" target="_blank" rel="noopener">View on OpenSea ↗</a>
       </div>
     </div>
   </div>
 
   <div class="card">
+    <div class="chain-tabs">
+      <button class="chain-tab active" id="tabRobinhood" type="button">USDG · Robinhood</button>
+      <button class="chain-tab" id="tabBase" type="button">USDC · Base</button>
+    </div>
     <div class="stats-grid">
       <div class="stat-box"><div class="stat-val" id="sTickets">—</div><div class="stat-lbl">Tickets Sold</div></div>
-      <div class="stat-box"><div class="stat-val" id="sRaised">—</div><div class="stat-lbl">USDC or USDG Raised</div></div>
+      <div class="stat-box"><div class="stat-val" id="sRaised">—</div><div class="stat-lbl" id="sRaisedLbl">USDG Raised</div></div>
       <div class="stat-box"><div class="stat-val" id="sPrice">—</div><div class="stat-lbl">Ticket Price</div></div>
       <div class="stat-box"><div class="stat-val deadline" id="sDeadline">—</div><div class="stat-lbl">Deadline</div></div>
     </div>
@@ -104,22 +116,44 @@ button{width:100%;padding:14px;border:none;border-radius:12px;font-size:1em;font
         <input id="qty" type="number" min="1" max="100" value="1">
         <button class="qty-btn" id="qPlus">+</button>
       </div>
+      <div class="gift-row">
+        <input type="checkbox" id="giftChk">
+        <label for="giftChk">🎁 Buy as a gift for someone else</label>
+      </div>
+      <input class="addr-input" id="giftAddr" placeholder="Recipient wallet address (0x…)" spellcheck="false" autocomplete="off">
       <button class="btn-green" id="btnBuy">Buy Ticket</button>
       <div style="color:#888;font-size:.85em;text-align:center;margin-top:10px" id="costLbl"></div>
+    </div>
+    <div id="giftSection" style="display:none">
+      <div class="sec-title" style="margin-top:18px">🎁 Gift your tickets</div>
+      <div style="color:#888;font-size:.85em;line-height:1.5">You hold <span id="heldCount" style="color:#fff;font-weight:700">0</span> ticket(s) on this chain. Transfer some to a friend — their win chance, your refund rights.</div>
+      <input class="addr-input show" id="xferAddr" placeholder="Recipient wallet address (0x…)" spellcheck="false" autocomplete="off">
+      <div class="qty-row">
+        <button class="qty-btn" id="xMinus">−</button>
+        <input id="xferQty" type="number" min="1" max="100" value="1">
+        <button class="qty-btn" id="xPlus">+</button>
+      </div>
+      <button class="btn-dark" id="btnXfer">Gift Tickets</button>
+    </div>
+    <div id="refundSection" style="display:none">
+      <div class="sec-title" style="margin-top:18px">💸 Refund</div>
+      <div style="color:#888;font-size:.85em;line-height:1.5" id="refundInfo"></div>
+      <button class="btn-orange" id="btnRefund" style="display:none">Claim Refund</button>
     </div>
     <div class="msg" id="msg"></div>
   </div>
 
   <div class="card">
-    <div class="sec-title">🎟️ Ticket Holders</div>
+    <div class="sec-title">🎟️ Ticket Holders — <span id="holdersChain">Robinhood</span></div>
     <div id="buyersList" style="color:#888;font-size:.85em">loading…</div>
   </div>
 
   <div class="foot">
-    Escrow contract: <span class="addr">0x9Dc6A206c09d4CF429D7A171A590c8bA2EE3b1EF</span><br>
-    USDG token: <span class="addr">0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168</span><br>
-    Robinhood Chain (id 4663). You need USDC or USDG for tickets + a small amount of ETH on Robinhood Chain for gas.<br>
-    If the minimum isn't met by the deadline, buyers can call refund() on the contract to get their USDC or USDG back.
+    USDG escrow (Robinhood Chain, id 4663): <span class="addr">0x26078219A91F7B9B3411519616C55D120F809a8f</span><br>
+    USDC escrow (Base, id 8453): <span class="addr">0xd0f7CEB4462551F91a2350893C17543Ec131fa9F</span><br>
+    $10 per ticket, $800 minimum per escrow, deadline Jul 29 2026 8:00 PM ET.<br>
+    Funds stay locked in the escrow contracts. If an escrow misses its minimum, buyers reclaim their money with the refund button above (window open for 30 days after the deadline, until Aug 28 2026).<br>
+    You need a small amount of ETH on the chain you buy on for gas.
   </div>
 </div>
 
@@ -137,20 +171,19 @@ button{width:100%;padding:14px;border:none;border-radius:12px;font-size:1em;font
 <script>
 (function(){
 "use strict";
-var RPC='https://rpc.mainnet.chain.robinhood.com';
-var CHAIN_HEX='0x1237'; // 4663
-var ESCROW='0x9Dc6A206c09d4CF429D7A171A590c8bA2EE3b1EF';
-var USDG='0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168';
-var DEC=1000000n; // USDG has 6 decimals
+var CHAINS={
+  robinhood:{key:'robinhood',hex:'0x1237',id:4663,rpc:'https://rpc.mainnet.chain.robinhood.com',escrow:'0x26078219A91F7B9B3411519616C55D120F809a8f',token:'0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168',sym:'USDG',chainName:'Robinhood Chain',label:'Robinhood',blockscout:'https://robinhoodchain.blockscout.com/api/v2'},
+  base:{key:'base',hex:'0x2105',id:8453,rpc:'https://mainnet.base.org',escrow:'0xd0f7CEB4462551F91a2350893C17543Ec131fa9F',token:'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',sym:'USDC',chainName:'Base',label:'Base',blockscout:null}
+};
+var cur=CHAINS.robinhood;
+var DEC=1000000n; // both USDG and USDC have 6 decimals
 var DAPP_URL='https://bigebelieves.github.io/raffle-hood/';
 var WC_PROJECT_ID='8970cd9ed5eb0de88206ad00f50b813b';
 var WC_ESM='https://esm.sh/@walletconnect/ethereum-provider@2.23.10';
-var BLOCKSCOUT='https://robinhoodchain.blockscout.com/api/v2';
 var HANDLES_URL='https://raw.githubusercontent.com/BigEBelieves/raffle-hood/main/handles.json';
 var handleMap={};
 var wcProvider=null;
 
-// WalletConnect registry IDs — pinned to the top of the WC modal wallet list
 var WC_RECOMMENDED=[
   '8837dd9413b1d9b585ee937d27a816590248386d9dbf59f5cd3422dbbb65683e', // Robinhood Wallet
   '18388be9ac2d02726dbac9777c96efaac06d744b2f6d580fccdd4127a6d01fd1', // Rabby
@@ -164,24 +197,29 @@ var WC_RECOMMENDED=[
   'fd20dc426fb37566d803205b19bbc1d4096b248ac04548e3cfb6b3a38bd033aa'  // Base (Coinbase Wallet)
 ];
 
-// function selectors (keccak-verified)
+// V3 selectors (keccak-verified against the deployed, explorer-verified contract)
 var SEL={
   status:'0x200d2ed2',
   ticketPrice:'0x1209b1f6',
   minRevenue:'0x491532bc',
   deadline:'0x29dcb0cf',
-  buyersCount:'0xba49a08c',
-  minimumMet:'0x667b807e',
-  buyTickets:'0x2f366637',
+  getHolders:'0xb5698071',
   getBuyers:'0xa17c1a53',
   ticketsOf:'0x31657926',
+  contributions:'0x42e94c90',
+  buyTickets:'0x2f366637',
+  buyTicketsFor:'0x1c23e280',
+  transferTickets:'0x323a9beb',
+  refund:'0x590e1ae3',
+  swept:'0x2113eaca',
+  sweepAt:'0x234282d3',
   approve:'0x095ea7b3',
   allowance:'0xdd62ed3e',
   balanceOf:'0x70a08231'
 };
 
-var account=null, provider=null, price=0n, minRev=0n, raised=0n;
-var offchainBuyers=[]; // credits from raw USDG transfers not registered via buyTickets()
+var account=null, provider=null, providerName=null;
+var price=0n, minRev=0n, raised=0n, deadlineSec=0, minimumMet=false;
 
 // EIP-6963 multi-wallet discovery
 var discovered=[];
@@ -195,9 +233,10 @@ window.dispatchEvent(new Event('eip6963:requestProvider'));
 
 function pad(x){return x.replace(/^0x/,'').toLowerCase().padStart(64,'0');}
 function padN(n){return n.toString(16).padStart(64,'0');}
-function word(hex,i){i=i||0;return BigInt('0x'+hex.replace(/^0x/,'').slice(i*64,(i+1)*64||undefined).slice(0,64));}
+function word(hex,i){i=i||0;return BigInt('0x'+hex.replace(/^0x/,'').slice(i*64,(i+1)*64).slice(0,64));}
 function fmt(v){var w=v/DEC,f=(v%DEC).toString().padStart(6,'0').replace(/0+$/,'');return w.toString()+(f?'.'+f:'');}
 function short(a){return a.slice(0,6)+'…'+a.slice(-4);}
+function isAddr(a){return /^0x[0-9a-fA-F]{40}$/.test(a);}
 function decodeAddrArray(hex){
   var h=hex.replace(/^0x/,'');
   var len=Number(BigInt('0x'+h.slice(64,128)));
@@ -207,7 +246,7 @@ function decodeAddrArray(hex){
 }
 
 function rpcRead(to,data){
-  return fetch(RPC,{method:'POST',headers:{'Content-Type':'application/json'},
+  return fetch(cur.rpc,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_call',params:[{to:to,data:data},'latest']})})
     .then(function(r){return r.json();})
     .then(function(j){if(j.error)throw new Error(j.error.message);return j.result;});
@@ -216,41 +255,31 @@ function rpcRead(to,data){
 function setMsg(cls,text){var m=document.getElementById('msg');m.className='msg '+cls;m.textContent=text;}
 function clearMsg(){document.getElementById('msg').className='msg';}
 
-// ---------- offchain credit detection via Blockscout ----------
-// Fetches all USDG token transfers TO the escrow from Blockscout.
-// Compares each sender's total transferred USDG with their on-chain registered tickets.
-// Any excess = raw transfer not registered via buyTickets() = offchain credit.
-// Also fetches wallet→X handle mapping for attribution display.
-function loadOffchainCredits(onchainBuyers){
+// ---------- offchain timeline credits (Robinhood only, via Blockscout) ----------
+function loadOffchainCredits(onchainHolders){
+  if(!cur.blockscout)return Promise.resolve([]);
   return fetch(HANDLES_URL).then(function(hr){return hr.json();}).then(function(hm){
     if(hm&&typeof hm==='object'&&!Array.isArray(hm))handleMap=hm;
   }).catch(function(){}).then(function(){
-  return fetch(BLOCKSCOUT+'/addresses/'+ESCROW+'/token-transfers?type=ERC-20&filter=to')
+  return fetch(cur.blockscout+'/addresses/'+cur.escrow+'/token-transfers?type=ERC-20&filter=to')
     .then(function(r){return r.json();})
     .then(function(data){
       if(!data||!data.items)return[];
-
-      // Build on-chain map: addr(lowercase) -> {tickets, usdg}
       var onchainMap={};
-      onchainBuyers.forEach(function(b){
+      onchainHolders.forEach(function(b){
         onchainMap[b.addr.toLowerCase()]={tickets:b.tickets,usdg:BigInt(b.tickets)*price};
       });
-
-      // Group all USDG transfers by sender
       var bySender={};
       data.items.forEach(function(item){
         var tokenAddr=item.token&&item.token.address;
-        if(!tokenAddr||tokenAddr.toLowerCase()!==USDG.toLowerCase())return;
+        if(!tokenAddr||tokenAddr.toLowerCase()!==cur.token.toLowerCase())return;
         var from=item.from&&item.from.hash;
         if(!from)return;
         from=from.toLowerCase();
         var val=BigInt(item.value||'0');
         if(!bySender[from])bySender[from]={total:0n,txHash:item.tx_hash};
         bySender[from].total+=val;
-        bySender[from].txHash=item.tx_hash;
       });
-
-      // Compute offchain credits
       var credits=[];
       Object.keys(bySender).forEach(function(addr){
         var totalSent=bySender[addr].total;
@@ -259,74 +288,53 @@ function loadOffchainCredits(onchainBuyers){
         if(extraUsdg>0n&&price>0n){
           var extraTickets=Number(extraUsdg/price);
           if(extraTickets>0){
-            credits.push({
-              addr:addr,
-              tickets:extraTickets,
-              usdg:extraUsdg,
-              txHash:bySender[addr].txHash,
-              offchain:true
-            });
+            credits.push({addr:addr,tickets:extraTickets,usdg:extraUsdg,offchain:true});
           }
         }
       });
-
       return credits;
     });
-  })
-    .catch(function(e){
-      // Blockscout unavailable — show on-chain only
-      return[];
-    });
+  }).catch(function(){return[];});
 }
 
-// ---------- merged stats + buyer list ----------
+// ---------- stats + holders ----------
 function refreshAll(){
-  // Step 1: Load on-chain stats
-  Promise.all([
-    rpcRead(ESCROW,SEL.status),
-    rpcRead(ESCROW,SEL.ticketPrice),
-    rpcRead(ESCROW,SEL.minRevenue),
-    rpcRead(ESCROW,SEL.deadline),
-    rpcRead(ESCROW,SEL.buyersCount)
-  ]).then(function(res){
-    raised=word(res[0],0);
-    price=word(res[1]);
-    minRev=word(res[2]);
-    var dl=Number(word(res[3]));
-    var onchainBuyersCount=word(res[4]);
-    var onchainTickets=price>0n?raised/price:0n;
+  rpcRead(cur.escrow,SEL.status).then(function(st){
+    raised=word(st,0);
+    var totalTickets=Number(word(st,1));
+    var buyers=Number(word(st,2));
+    minimumMet=word(st,3)===1n;
+    deadlineSec=Number(word(st,5));
+    minRev=word(st,6);
+    price=word(st,7);
 
-    // Step 2: Load on-chain buyers
-    return rpcRead(ESCROW,SEL.getBuyers+padN(0n)+padN(200n)).then(function(hex){
+    return rpcRead(cur.escrow,SEL.getHolders+padN(0n)+padN(300n)).then(function(hex){
       var addrs=decodeAddrArray(hex);
       return Promise.all(addrs.map(function(a){
-        return rpcRead(ESCROW,SEL.ticketsOf+pad(a)).then(function(t){
+        return rpcRead(cur.escrow,SEL.ticketsOf+pad(a)).then(function(t){
           return{addr:a,tickets:Number(word(t)),offchain:false};
         });
-      })).then(function(onchainBuyers){
-        // Step 3: Load offchain credits from Blockscout
-        return loadOffchainCredits(onchainBuyers).then(function(credits){
-          offchainBuyers=credits;
-
-          // Step 4: Display merged stats
+      })).then(function(holders){
+        holders=holders.filter(function(h){return h.tickets>0;});
+        return loadOffchainCredits(holders).then(function(credits){
           var offTickets=credits.reduce(function(s,c){return s+c.tickets;},0);
-          var offUsdg=credits.reduce(function(s,c){return s+c.usdg;},0n);
-          var totalTickets=Number(onchainTickets)+offTickets;
-          var totalRaised=raised+offUsdg;
-          var totalBuyers=Number(onchainBuyersCount)+credits.length;
+          var offRaised=credits.reduce(function(s,c){return s+c.usdg;},0n);
+          var shownTickets=totalTickets+offTickets;
+          var shownRaised=raised+offRaised;
+          var shownBuyers=buyers+credits.length;
 
-          document.getElementById('sTickets').textContent=totalTickets.toString()+' ('+totalBuyers.toString()+' buyers)';
-          document.getElementById('sRaised').textContent=fmt(totalRaised);
-          document.getElementById('sPrice').textContent=fmt(price)+' USDC or USDG';
-          var d=new Date(dl*1000);
+          document.getElementById('sTickets').textContent=shownTickets+' ('+shownBuyers+' buyers)';
+          document.getElementById('sRaised').textContent=fmt(shownRaised);
+          document.getElementById('sRaisedLbl').textContent=cur.sym+' Raised';
+          document.getElementById('sPrice').textContent=fmt(price)+' '+cur.sym;
+          var d=new Date(deadlineSec*1000);
           document.getElementById('sDeadline').textContent=d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
-          var pct=minRev>0n?Number(totalRaised*100n/minRev):0;
+          var pct=minRev>0n?Number(shownRaised*100n/minRev):0;
           document.getElementById('bar').style.width=Math.min(pct,100)+'%';
-          document.getElementById('barLbl').textContent=fmt(totalRaised)+' / '+fmt(minRev)+' USDC or USDG minimum ('+pct+'%)';
+          document.getElementById('barLbl').textContent=fmt(shownRaised)+' / '+fmt(minRev)+' '+cur.sym+' minimum ('+pct+'%)';
           updateCost();
-
-          // Step 5: Display merged buyer list
-          displayBuyers(onchainBuyers.concat(credits));
+          displayBuyers(holders.concat(credits));
+          updateSections();
         });
       });
     });
@@ -335,29 +343,90 @@ function refreshAll(){
   });
 }
 
-function displayBuyers(allBuyers){
+function displayBuyers(all){
   var listEl=document.getElementById('buyersList');
-  if(allBuyers.length===0){listEl.textContent='no tickets sold yet — be the first!';return;}
-
-  allBuyers.sort(function(a,b){return b.tickets>a.tickets?1:(b.tickets<a.tickets?-1:0);});
+  document.getElementById('holdersChain').textContent=cur.label;
+  if(all.length===0){listEl.style.color='#888';listEl.textContent='no tickets sold yet — be the first!';return;}
+  all.sort(function(a,b){return b.tickets>a.tickets?1:(b.tickets<a.tickets?-1:0);});
   listEl.style.color='';listEl.style.fontSize='';
-  listEl.innerHTML=allBuyers.map(function(r){
+  listEl.innerHTML=all.map(function(r){
     var isYou=account&&r.addr.toLowerCase()===account.toLowerCase();
     var tag=r.offchain?'<span class="buyer-tag">⚡ timeline</span>':'';
-    var h=handleMap[r.addr.toLowerCase()]||handleMap[r.addr]||'';
+    var h=handleMap[r.addr.toLowerCase()]||'';
     var handleHtml=h?'<span class="buyer-handle">@'+h+'</span> ':'';
     return '<div class="buyer-row'+(isYou?' you':'')+'">'
       +'<div>'+handleHtml+'<span class="buyer-addr">'+short(r.addr)+'</span>'+tag+(isYou?'<span class="buyer-you">(you)</span>':'')+'</div>'
-      +'<div style="text-align:right"><div class="buyer-tickets">'+r.tickets.toString()+' 🎟️</div>'
-      +'<div class="buyer-usdg">'+fmt(BigInt(r.tickets)*price)+' USDC or USDG</div></div>'
+      +'<div style="text-align:right"><div class="buyer-tickets">'+r.tickets+' 🎟️</div>'
+      +'<div class="buyer-usdg">'+fmt(BigInt(r.tickets)*price)+' '+cur.sym+'</div></div>'
       +'</div>';
   }).join('');
 }
 
 function updateCost(){
   var q=BigInt(Math.max(1,parseInt(document.getElementById('qty').value)||1));
-  document.getElementById('costLbl').textContent='Total: '+fmt(price*q)+' USDC or USDG';
-  document.getElementById('btnBuy').textContent=q===1n?'Buy Ticket':'Buy '+q.toString()+' Tickets';
+  document.getElementById('costLbl').textContent='Total: '+fmt(price*q)+' '+cur.sym;
+  var gift=document.getElementById('giftChk').checked;
+  document.getElementById('btnBuy').textContent=(gift?'Gift ':'Buy ')+(q===1n?'Ticket':q.toString()+' Tickets');
+}
+
+// ---------- post-deadline / gift / refund sections ----------
+function updateSections(){
+  var nowSec=Math.floor(Date.now()/1000);
+  var ended=deadlineSec>0&&nowSec>=deadlineSec;
+  var buySec=document.getElementById('buySection');
+  var giftSec=document.getElementById('giftSection');
+  var refSec=document.getElementById('refundSection');
+
+  if(!account){giftSec.style.display='none';refSec.style.display='none';return;}
+  buySec.style.display=ended?'none':'block';
+
+  if(!ended){
+    refSec.style.display='none';
+    rpcRead(cur.escrow,SEL.ticketsOf+pad(account)).then(function(t){
+      var held=Number(word(t));
+      if(held>0){
+        document.getElementById('heldCount').textContent=held;
+        document.getElementById('xferQty').max=held;
+        giftSec.style.display='block';
+      }else giftSec.style.display='none';
+    }).catch(function(){giftSec.style.display='none';});
+    return;
+  }
+
+  // deadline passed
+  giftSec.style.display='none';
+  refSec.style.display='block';
+  var info=document.getElementById('refundInfo');
+  var btn=document.getElementById('btnRefund');
+  btn.style.display='none';
+
+  if(minimumMet){
+    info.textContent='The '+cur.sym+' minimum was met on '+cur.chainName+' — the raffle proceeds and the winner will be drawn. No refunds on this chain.';
+    return;
+  }
+  Promise.all([
+    rpcRead(cur.escrow,SEL.contributions+pad(account)),
+    rpcRead(cur.escrow,SEL.swept),
+    rpcRead(cur.escrow,SEL.sweepAt)
+  ]).then(function(res){
+    var contrib=word(res[0]);
+    var isSwept=word(res[1])===1n;
+    var sweepAt=Number(word(res[2]));
+    var sweepDate=new Date(sweepAt*1000).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+    if(contrib===0n){
+      info.textContent='The minimum was not met on '+cur.chainName+'. Your wallet has no refundable contribution on this chain (already refunded, or bought on the other chain — switch tabs to check).';
+      return;
+    }
+    if(isSwept){
+      info.textContent='The 30-day refund window has closed and remaining funds were swept. Refunds are no longer available on this chain.';
+      return;
+    }
+    info.textContent='The minimum was not met on '+cur.chainName+'. You can reclaim your '+fmt(contrib)+' '+cur.sym+'. Refunds are open until '+sweepDate+'.';
+    btn.textContent='Claim '+fmt(contrib)+' '+cur.sym+' Refund';
+    btn.style.display='block';
+  }).catch(function(e){
+    info.textContent='Could not check refund status: '+(e.message||e);
+  });
 }
 
 // ---------- wallet picker modal ----------
@@ -399,11 +468,11 @@ function openModal(){
 function closeModal(){document.getElementById('modalBg').classList.remove('open');}
 
 function onConnected(name){
+  providerName=name;
   document.getElementById('btnConnect').style.display='none';
   var pill=document.getElementById('walletPill');
   pill.style.display='block';pill.textContent=(name?name+' · ':'')+short(account);
-  document.getElementById('buySection').style.display='block';
-  setMsg('info','Wallet connected. Make sure your wallet is on Robinhood Chain (id 4663) before buying.');
+  setMsg('info','Wallet connected. Make sure your wallet is on '+cur.chainName+' (id '+cur.id+') before buying.');
   refreshAll();
 }
 
@@ -413,14 +482,14 @@ function connectWalletConnect(){
     var EP=mod.EthereumProvider||(mod.default&&mod.default.EthereumProvider)||mod.default;
     return EP.init({
       projectId:WC_PROJECT_ID,
-      optionalChains:[4663],
+      optionalChains:[4663,8453],
       showQrModal:true,
-      rpcMap:{4663:RPC},
+      rpcMap:{4663:CHAINS.robinhood.rpc,8453:CHAINS.base.rpc},
       qrModalOptions:{
         themeMode:'dark',
         explorerRecommendedWalletIds:WC_RECOMMENDED
       },
-      metadata:{name:'Raffle Hood',description:'Buy USDC or USDG raffle tickets on Robinhood Chain — win a Bankr Club NFT',url:DAPP_URL,icons:['https://i2c.seadn.io/base/0x9fab8c51f911f0ba6dab64fd6e979bcf6424ce82/dcf043e704d43a9b385243cb0c776f/acdcf043e704d43a9b385243cb0c776f.gif']}
+      metadata:{name:'Raffle Hood',description:'Buy raffle tickets with USDG or USDC — win a Bankr Club NFT',url:DAPP_URL,icons:['https://i2c.seadn.io/base/0x9fab8c51f911f0ba6dab64fd6e979bcf6424ce82/dcf043e704d43a9b385243cb0c776f/acdcf043e704d43a9b385243cb0c776f.gif']}
     }).then(function(p){wcProvider=p;return p;});
   });
   ready.then(function(p){
@@ -445,14 +514,14 @@ function connectWalletConnect(){
 }
 
 function ensureChain(){
-  return provider.request({method:'wallet_switchEthereumChain',params:[{chainId:CHAIN_HEX}]})
+  return provider.request({method:'wallet_switchEthereumChain',params:[{chainId:cur.hex}]})
   .catch(function(e){
     if(e.code===4902||(e.data&&e.data.originalError&&e.data.originalError.code===4902)){
       return provider.request({method:'wallet_addEthereumChain',params:[{
-        chainId:CHAIN_HEX,
-        chainName:'Robinhood Chain',
+        chainId:cur.hex,
+        chainName:cur.chainName,
         nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18},
-        rpcUrls:[RPC]
+        rpcUrls:[cur.rpc]
       }]});
     }
     throw e;
@@ -494,25 +563,30 @@ function buy(){
   if(!provider||!account){setMsg('err','Connect a wallet first.');return;}
   var q=BigInt(Math.max(1,parseInt(document.getElementById('qty').value)||1));
   var cost=price*q;
+  var gift=document.getElementById('giftChk').checked;
+  var rcpt=document.getElementById('giftAddr').value.trim();
+  if(gift&&!isAddr(rcpt)){setMsg('err','Enter a valid recipient wallet address (0x…) for the gift.');return;}
+  if(gift&&rcpt.toLowerCase()===account.toLowerCase())gift=false;
   var btn=document.getElementById('btnBuy');
   btn.disabled=true;
-  Promise.resolve()
-  .then(function(){return rpcRead(USDG,SEL.balanceOf+pad(account));})
+  ensureChain().catch(function(){})
+  .then(function(){return rpcRead(cur.token,SEL.balanceOf+pad(account));})
   .then(function(balHex){
-    if(word(balHex)<cost)throw new Error('Insufficient USDC or USDG: you have '+fmt(word(balHex))+', need '+fmt(cost));
-    return rpcRead(USDG,SEL.allowance+pad(account)+pad(ESCROW));
+    if(word(balHex)<cost)throw new Error('Insufficient '+cur.sym+': you have '+fmt(word(balHex))+', need '+fmt(cost)+' on '+cur.chainName);
+    return rpcRead(cur.token,SEL.allowance+pad(account)+pad(cur.escrow));
   })
   .then(function(alHex){
     if(word(alHex)>=cost)return null;
-    setMsg('info','Step 1/2: approve '+fmt(cost)+' USDC or USDG in your wallet…');
-    return sendTx(USDG,SEL.approve+pad(ESCROW)+padN(cost));
+    setMsg('info','Step 1/2: approve '+fmt(cost)+' '+cur.sym+' in your wallet…');
+    return sendTx(cur.token,SEL.approve+pad(cur.escrow)+padN(cost));
   })
   .then(function(){
-    setMsg('info','Step 2/2: confirm the ticket purchase in your wallet…');
-    return sendTx(ESCROW,SEL.buyTickets+padN(q));
+    setMsg('info','Step 2/2: confirm the '+(gift?'gift ':'')+'purchase in your wallet…');
+    if(gift)return sendTx(cur.escrow,SEL.buyTicketsFor+pad(rcpt)+padN(q));
+    return sendTx(cur.escrow,SEL.buyTickets+padN(q));
   })
   .then(function(){
-    setMsg('ok','🎟️ Success! You bought '+q.toString()+' ticket'+(q>1n?'s':'')+' for '+fmt(cost)+' USDC or USDG. Good luck!');
+    setMsg('ok','🎟️ Success! '+(gift?'You gifted '+q.toString()+' ticket'+(q>1n?'s':'')+' to '+short(rcpt):'You bought '+q.toString()+' ticket'+(q>1n?'s':''))+' for '+fmt(cost)+' '+cur.sym+'. Good luck!');
     return refreshAll();
   })
   .catch(function(e){
@@ -523,13 +597,87 @@ function buy(){
   .finally(function(){btn.disabled=false;});
 }
 
+function giftHeld(){
+  if(!provider||!account){setMsg('err','Connect a wallet first.');return;}
+  var to=document.getElementById('xferAddr').value.trim();
+  if(!isAddr(to)){setMsg('err','Enter a valid recipient wallet address (0x…).');return;}
+  if(to.toLowerCase()===account.toLowerCase()){setMsg('err','You cannot gift tickets to yourself.');return;}
+  var q=BigInt(Math.max(1,parseInt(document.getElementById('xferQty').value)||1));
+  var btn=document.getElementById('btnXfer');
+  btn.disabled=true;
+  ensureChain().catch(function(){})
+  .then(function(){
+    setMsg('info','Confirm the ticket transfer in your wallet…');
+    return sendTx(cur.escrow,SEL.transferTickets+pad(to)+padN(q));
+  })
+  .then(function(){
+    setMsg('ok','🎁 Gifted '+q.toString()+' ticket'+(q>1n?'s':'')+' to '+short(to)+'. Their win chance — your refund rights stay with you.');
+    return refreshAll();
+  })
+  .catch(function(e){
+    var m=e&&e.message?e.message:String(e);
+    if(e&&e.code===4001)m='Transaction rejected in wallet.';
+    setMsg('err',m);
+  })
+  .finally(function(){btn.disabled=false;});
+}
+
+function claimRefund(){
+  if(!provider||!account){setMsg('err','Connect a wallet first.');return;}
+  var btn=document.getElementById('btnRefund');
+  btn.disabled=true;
+  ensureChain().catch(function(){})
+  .then(function(){
+    setMsg('info','Confirm the refund in your wallet…');
+    return sendTx(cur.escrow,SEL.refund);
+  })
+  .then(function(){
+    setMsg('ok','💸 Refund claimed! Your '+cur.sym+' is back in your wallet.');
+    return refreshAll();
+  })
+  .catch(function(e){
+    var m=e&&e.message?e.message:String(e);
+    if(e&&e.code===4001)m='Transaction rejected in wallet.';
+    setMsg('err',m);
+  })
+  .finally(function(){btn.disabled=false;});
+}
+
+function setChain(key){
+  cur=CHAINS[key];
+  document.getElementById('tabRobinhood').className='chain-tab'+(key==='robinhood'?' active':'');
+  document.getElementById('tabBase').className='chain-tab'+(key==='base'?' active':'');
+  document.getElementById('buyersList').textContent='loading…';
+  clearMsg();
+  refreshAll();
+  if(provider&&account)ensureChain().catch(function(){setMsg('info','Switch your wallet to '+cur.chainName+' (id '+cur.id+') to buy on this tab.');});
+}
+
 document.getElementById('btnConnect').addEventListener('click',openModal);
 document.getElementById('modalClose').addEventListener('click',closeModal);
 document.getElementById('modalBg').addEventListener('click',function(e){if(e.target===this)closeModal();});
 document.getElementById('btnBuy').addEventListener('click',buy);
+document.getElementById('btnXfer').addEventListener('click',giftHeld);
+document.getElementById('btnRefund').addEventListener('click',claimRefund);
+document.getElementById('tabRobinhood').addEventListener('click',function(){setChain('robinhood');});
+document.getElementById('tabBase').addEventListener('click',function(){setChain('base');});
+document.getElementById('giftChk').addEventListener('change',function(){
+  document.getElementById('giftAddr').className='addr-input'+(this.checked?' show':'');
+  updateCost();
+});
 document.getElementById('qty').addEventListener('input',updateCost);
 document.getElementById('qMinus').addEventListener('click',function(){var i=document.getElementById('qty');i.value=Math.max(1,(parseInt(i.value)||1)-1);updateCost();});
 document.getElementById('qPlus').addEventListener('click',function(){var i=document.getElementById('qty');i.value=Math.min(100,(parseInt(i.value)||1)+1);updateCost();});
+document.getElementById('xMinus').addEventListener('click',function(){var i=document.getElementById('xferQty');i.value=Math.max(1,(parseInt(i.value)||1)-1);});
+document.getElementById('xPlus').addEventListener('click',function(){var i=document.getElementById('xferQty');i.value=Math.min(100,(parseInt(i.value)||1)+1);});
+
+// show buy section once connected
+var _onConnected=onConnected;
+onConnected=function(name){
+  _onConnected(name);
+  var nowSec=Math.floor(Date.now()/1000);
+  if(!deadlineSec||nowSec<deadlineSec)document.getElementById('buySection').style.display='block';
+};
 
 refreshAll();
 setInterval(refreshAll,30000);
